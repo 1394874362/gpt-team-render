@@ -363,6 +363,7 @@ def check_account():
         return jsonify({"code": 400, "valid": False, "message": "缺少token参数"}), 400
     
     print(f"🔍 检测账号状态...")
+    account_id_db = data.get('account_id')
     
     session = cffi_requests.Session(impersonate="chrome120")
     session.proxies = {"http": PROXY_URL, "https": PROXY_URL}
@@ -449,6 +450,21 @@ def check_account():
                     if expires_at and not first_expires_at:
                         first_expires_at = expires_at
         
+        # [修改] 如果提供了 account_id，则更新数据库
+        if account_id_db:
+             try:
+                 # 更新 expires_at
+                 # 注意: 这里假设 D1 表中有 expires_at 字段
+                 # 如果没有，可能需要 schema migration，但 Worker 代码似乎用了 expires_at
+                 if first_expires_at:
+                     d1_client.query_d1("UPDATE accounts SET expires_at = ?, updated_at = datetime('now') WHERE id = ?", [first_expires_at, account_id_db])
+                     print(f"💾 更新数据库 expires_at: {first_expires_at} (ID: {account_id_db})")
+                 else:
+                     # 如果没找到 Team, 可能需要标记?
+                     d1_client.query_d1("UPDATE accounts SET updated_at = datetime('now') WHERE id = ?", [account_id_db])
+             except Exception as db_e:
+                 print(f"⚠️ 数据库更新失败: {db_e}")
+
         if team_accounts:
             return jsonify({
                 "code": 200,
@@ -456,7 +472,7 @@ def check_account():
                 "message": "OK",
                 "teamCount": len(team_accounts),
                 "teams": team_accounts,
-                "expiresAt": first_expires_at  # 顶层也返回到期时间，方便Worker使用
+                "expiresAt": first_expires_at
             })
         else:
             # 账号有效但没有Team
