@@ -719,8 +719,18 @@ def get_members():
             users_data = resp.json()
             members = []
             for u in users_data.get('items', []):
+            print(f"🔍 [DEBUG] Member items count: {len(users_data.get('items', []))}")
+            if len(users_data.get('items', [])) > 0:
+                 print(f"🔍 [DEBUG] First member sample: {users_data.get('items', [])[0]}")
+
+            members = []
+            for u in users_data.get('items', []):
                 # 处理时间戳: 可能为浮点数(170000.0) 或 整数, 甚至 None
                 created_ts = u.get('created')
+                # 尝试其他可能的字段名
+                if not created_ts:
+                    created_ts = u.get('created_at') or u.get('joined_at') or u.get('joined')
+                
                 if not created_ts:
                      created_ts = 0
                 
@@ -728,10 +738,11 @@ def get_members():
                     "email": u.get('email'),
                     "name": u.get('name'),
                     "role": u.get('role'),
-                    "joinedAt": int(created_ts) # 确保转换为整数
+                    "joinedAt": int(float(created_ts)) # 确保转换为整数, handle float string
                 })
             return jsonify({"code": 200, "data": {"members": members}})
         else:
+            print(f"❌ Fetch members failed: {resp.status_code} - {resp.text}")
             return jsonify({"code": resp.status_code, "message": f"Fetch members failed: {resp.text[:200]}"})
     except Exception as e:
         print(f"❌ Get members error: {e}")
