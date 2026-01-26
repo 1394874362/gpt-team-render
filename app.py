@@ -165,28 +165,26 @@ def get_team_id_and_send_invite(token, user_email):
         return False, f"请求异常: {str(e)}", None
 
 def get_available_token():
-                    continue
-                    
-                used = acc.get("used_invites", 0)
-                max_invites = acc.get("max_invites", 8)
-                
-                if used < max_invites:
-                    valid_accounts.append(acc)
+    """从 Cloudflare D1 直接获取可用的账号 token，优先使用 invite 次数最少的"""
+    try:
+        # 使用 d1_client 直接查询 Workers 数据库
+        account = d1_client.get_best_account_from_d1()
+        
+        if account:
+            # 兼容处理：D1返回的可能是 'used_invites' 或 'usedInvites' 取决于你的表定义
+            name = account.get("name", "Unknown")
+            used = account.get("used_invites", 0)
+            max_uses = account.get("max_invites", 8)
             
-            if not valid_accounts:
-                print("没有找到有剩余邀请额度的活跃账号")
-                return None
+            print(f"✅ [D1实时] 选中最佳账号: {name} (Used: {used}/{max_uses})")
             
-            # 按照 used_invites 升序排序 (使用最少的优先)
-            valid_accounts.sort(key=lambda x: x.get("used_invites", 0))
-            
-            best_account = valid_accounts[0]
-            print(f"✅ 选中最佳账号: {best_account.get('name')} (Used: {best_account.get('used_invites')}/{best_account.get('max_invites')})")
-            
-            return best_account.get("authorization_token")
+            # 确保返回 token
+            return account.get("authorization_token")
+        else:
+            print("❌ [D1实时] 未找到可用账号")
             
     except Exception as e:
-        print(f"获取token失败: {e}")
+        print(f"❌ [D1实时] 获取token失败: {e}")
     return None
 
 # ================= Telegram Bot 指令 =================
