@@ -686,6 +686,149 @@ def auto_import():
         print(f"❌ 导入失败: {e}")
         return jsonify({"success": False, "message": str(e)}), 500
 
+# ================= 成员管理 API (补全 Admin 功能) =================
+
+@app.route('/api/members', methods=['POST'])
+def get_members():
+    """获取成员列表"""
+    data = request.json
+    token = data.get('token')
+    account_id = data.get('account_id')
+    
+    if not token or not account_id:
+        return jsonify({"code": 400, "message": "Missing parameters"}), 400
+        
+    session = cffi_requests.Session(impersonate="chrome120")
+    session.proxies = {"http": PROXY_URL, "https": PROXY_URL}
+    
+    headers = {
+        "Authorization": f"Bearer {token}" if not token.startswith("Bearer") else token,
+        "Content-Type": "application/json",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+        "oai-device-id": str(uuid.uuid4()),
+        "chatgpt-account-id": account_id,
+        "Referer": "https://chatgpt.com/admin/members",
+        "Origin": "https://chatgpt.com"
+    }
+    
+    try:
+        url = f"https://chatgpt.com/backend-api/accounts/{account_id}/users?limit=100"
+        resp = session.get(url, headers=headers, timeout=15)
+        
+        if resp.status_code == 200:
+            users_data = resp.json()
+            members = []
+            for u in users_data.get('items', []):
+                members.append({
+                    "email": u.get('email'),
+                    "name": u.get('name'),
+                    "role": u.get('role'),
+                    "joinedAt": u.get('created', 0)
+                })
+            return jsonify({"code": 200, "data": {"members": members}})
+        else:
+            return jsonify({"code": resp.status_code, "message": f"Fetch members failed: {resp.text[:100]}"})
+    except Exception as e:
+        return jsonify({"code": 500, "message": str(e)}), 500
+
+@app.route('/api/pending-invites', methods=['POST'])
+def get_pending_invites():
+    """获取待处理邀请"""
+    data = request.json
+    token = data.get('token')
+    account_id = data.get('account_id')
+    
+    if not token or not account_id:
+         return jsonify({"code": 400, "message": "Missing parameters"}), 400
+
+    session = cffi_requests.Session(impersonate="chrome120")
+    session.proxies = {"http": PROXY_URL, "https": PROXY_URL}
+    
+    headers = {
+        "Authorization": f"Bearer {token}" if not token.startswith("Bearer") else token,
+        "Content-Type": "application/json",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+        "oai-device-id": str(uuid.uuid4()),
+        "chatgpt-account-id": account_id,
+        "Referer": "https://chatgpt.com/admin/members",
+        "Origin": "https://chatgpt.com"
+    }
+
+    try:
+        url = f"https://chatgpt.com/backend-api/accounts/{account_id}/invites?limit=100"
+        resp = session.get(url, headers=headers, timeout=15)
+        
+        if resp.status_code == 200:
+            invites_data = resp.json()
+            invites = []
+            for i in invites_data.get('items', []):
+                invites.append({
+                    "email": i.get('email'),
+                    "role": i.get('role'),
+                    "invitedAt": i.get('created', 0),
+                    "expiresAt": i.get('expires_at', 0)
+                })
+            return jsonify({"code": 200, "data": {"invites": invites}})
+        else:
+             return jsonify({"code": resp.status_code, "message": f"Fetch invites failed: {resp.text[:100]}"})
+    except Exception as e:
+        return jsonify({"code": 500, "message": str(e)}), 500
+
+@app.route('/api/batch-invite', methods=['POST'])
+def batch_invite():
+    """批量邀请"""
+    data = request.json
+    token = data.get('token')
+    account_id = data.get('account_id')
+    emails = data.get('emails', [])
+    
+    if not token or not account_id or not emails:
+        return jsonify({"code": 400, "message": "Missing parameters"}), 400
+
+    print(f"📧 开始批量邀请 {len(emails)} 个邮箱到 {account_id}")
+
+    success_count = 0
+    failed_count = 0
+    
+    session = cffi_requests.Session(impersonate="chrome120")
+    session.proxies = {"http": PROXY_URL, "https": PROXY_URL}
+    headers = {
+        "Authorization": f"Bearer {token}" if not token.startswith("Bearer") else token,
+        "Content-Type": "application/json",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+        "oai-device-id": str(uuid.uuid4()),
+        "chatgpt-account-id": account_id,
+        "Referer": "https://chatgpt.com/admin/members",
+        "Origin": "https://chatgpt.com"
+    }
+    
+    invite_url = f"https://chatgpt.com/backend-api/accounts/{account_id}/invites"
+    
+    for email in emails:
+        try:
+            payload = {
+                "email": email,
+                "role": "standard-user"
+            }
+            resp = session.post(invite_url, json=payload, headers=headers, timeout=10)
+            if resp.status_code == 200:
+                 success_count += 1
+            else:
+                 failed_count += 1
+                 print(f"❌ 邀请 {email} 失败: {resp.status_code} {resp.text}")
+        except Exception as e:
+            failed_count += 1
+            print(f"❌ 邀请 {email} 异常: {e}")
+            
+    return jsonify({
+        "code": 200, 
+        "data": {
+            "success": success_count,
+            "failed": failed_count
+        },
+        "message": f"处理完成: 成功 {success_count}, 失败 {failed_count}"
+    })
+
 # ================= 链接兑换API =================
 @app.route('/api/link-info', methods=['GET'])
 def get_link_info():
