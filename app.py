@@ -718,7 +718,6 @@ def get_members():
         if resp.status_code == 200:
             users_data = resp.json()
             members = []
-            for u in users_data.get('items', []):
             print(f"🔍 [DEBUG] Member items count: {len(users_data.get('items', []))}")
             if len(users_data.get('items', [])) > 0:
                  print(f"🔍 [DEBUG] First member sample: {users_data.get('items', [])[0]}")
