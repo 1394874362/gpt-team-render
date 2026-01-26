@@ -60,5 +60,6 @@ def get_best_account_from_d1():
     if accounts:
         # 二次筛选（虽然 SQL 已经排好序，但可以在这里加更多逻辑）
         # 注意: D1 API 返回的是字典列表
-        return accounts[0] # 返回第一个即可
+        import random
+        return random.choice(accounts) # 随机返回一个，实现负载均衡
     return None
