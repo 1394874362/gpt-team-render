@@ -609,6 +609,67 @@ def downgrade_owner():
             "message": f"系统错误: {str(e)}"
         }), 500
 
+@app.route('/api/auto-import', methods=['POST'])
+def auto_import():
+    """自动导入账号到 D1 (替代 Worker 逻辑，解决国内无法连接 Worker 问题)"""
+    data = request.json
+    secret = data.get('secret')
+    email = data.get('email')
+    team_id = data.get('team_id')
+    token = data.get('token')
+    
+    # 简单的密钥检查
+    if secret != "gpt-auto-import-2024-secret":
+        return jsonify({"success": False, "message": "Invalid secret"}), 403
+        
+    if not email or not team_id or not token:
+        return jsonify({"success": False, "message": "Missing parameters"}), 400
+        
+    print(f"📥 收到自动导入请求: {email} / {team_id}")
+    
+    try:
+        # 1. 检查是否存在
+        sql_check = "SELECT id FROM accounts WHERE name = ? AND account_id = ?"
+        existing = d1_client.query_d1(sql_check, [email, team_id])
+        
+        if existing and len(existing) > 0:
+            acc_id = existing[0].get('id')
+            # 更新
+            sql_update = "UPDATE accounts SET authorization_token = ?, is_active = 1, updated_at = datetime('now') WHERE id = ?"
+            d1_client.query_d1(sql_update, [token, acc_id])
+            print(f"✅ 账号已更新: {acc_id}")
+            return jsonify({
+                "success": True,
+                "action": "updated",
+                "message": "账号已更新",
+                "account_id": acc_id
+            })
+        else:
+            # 新增
+            sql_insert = """
+                INSERT INTO accounts (name, account_id, authorization_token, is_active, max_invites, used_invites, rotation_count, current_rotation, created_at, updated_at)
+                VALUES (?, ?, ?, 1, 8, 0, 1, 0, datetime('now'), datetime('now'))
+            """
+            d1_client.query_d1(sql_insert, [email, team_id, token])
+            
+            # 再查一次获取 ID
+            new_acc = d1_client.query_d1(sql_check, [email, team_id])
+            if new_acc and len(new_acc) > 0:
+                acc_id = new_acc[0].get('id')
+                print(f"✅ 新账号已创建: {acc_id}")
+                return jsonify({
+                    "success": True,
+                    "action": "created",
+                    "message": "新账号已创建",
+                    "account_id": acc_id
+                })
+            else:
+                return jsonify({"success": False, "message": "插入后获取ID失败"}), 500
+
+    except Exception as e:
+        print(f"❌ 导入失败: {e}")
+        return jsonify({"success": False, "message": str(e)}), 500
+
 # ================= 链接兑换API =================
 @app.route('/api/link-info', methods=['GET'])
 def get_link_info():
