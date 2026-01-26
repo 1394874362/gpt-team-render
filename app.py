@@ -478,14 +478,14 @@ def check_account():
 
 @app.route('/api/downgrade-owner', methods=['POST'])
 def downgrade_owner():
-    """将 Team owner 降级为 standard-user（供 Worker 调用）"""
+    """将所有 Team workspaces 的 owner 降级为 standard-user（供 Worker 调用）"""
     data = request.json
     token = data.get('token')
     
     if not token:
         return jsonify({"code": 400, "success": False, "message": "缺少token参数"}), 400
     
-    print(f"🔄 降级 owner 权限...")
+    print(f"🔄 开始批量降级 owner 权限...")
     
     session = cffi_requests.Session(impersonate="chrome120")
     session.proxies = {"http": PROXY_URL, "https": PROXY_URL}
@@ -502,7 +502,7 @@ def downgrade_owner():
     }
     
     try:
-        # 步骤1: 获取 account_id 和 user_id
+        # 步骤1: 获取所有 Team ID
         check_url = "https://chatgpt.com/backend-api/accounts/check/v4-2023-04-27"
         check_resp = session.get(check_url, headers=headers, timeout=15)
         
@@ -515,91 +515,98 @@ def downgrade_owner():
         data = check_resp.json()
         accounts_dict = data.get("accounts", {})
         
-        # 找 Team account_id
-        account_id = None
+        # 找出所有的 Team account_id
+        team_ids = []
         for acc_id, info in accounts_dict.items():
             if acc_id.startswith("org-") or "team" in info.get("account", {}).get("plan_type", "").lower():
-                account_id = acc_id
-                break
+                team_ids.append(acc_id)
         
-        if not account_id and accounts_dict:
-            account_id = list(accounts_dict.keys())[0]
+        if not team_ids:
+            # 如果没找到明确的team，尝试用默认的第一个（兼容旧逻辑，但可能有风险）
+            if accounts_dict:
+                first_id = list(accounts_dict.keys())[0]
+                team_ids.append(first_id)
+            else:
+                return jsonify({"code": 400, "success": False, "message": "未找到 Team 账号"})
         
-        if not account_id:
-            return jsonify({"code": 400, "success": False, "message": "未找到 Team 账号"})
+        print(f"🔍 找到 {len(team_ids)} 个 Team 空间需要降级: {team_ids}")
         
-        # 获取当前用户的 ID
-        # 需要从 /me 或 session 获取 user_id
-        me_url = "https://chatgpt.com/backend-api/me"
-        headers["chatgpt-account-id"] = account_id
-        me_resp = session.get(me_url, headers=headers, timeout=15)
+        results = []
+        success_count = 0
         
-        if me_resp.status_code != 200:
-            return jsonify({"code": me_resp.status_code, "success": False, "message": f"获取用户信息失败: HTTP {me_resp.status_code}"})
-        
-        me_data = me_resp.json()
-        user_id = me_data.get("id")
-        
-        if not user_id:
-            return jsonify({"code": 400, "success": False, "message": "未找到用户 ID"})
-        
-        print(f"✅ 获取到 Account ID: {account_id}, User ID: {user_id}")
-        
-        # 步骤2: 发送 PATCH 请求降级权限
-        # 修改 Referer 为通用页面，避免非管理员访问 /admin/members 被拒
-        headers["Referer"] = "https://chatgpt.com/"
-        
-        patch_url = f"https://chatgpt.com/backend-api/accounts/{account_id}/users/{user_id}"
-        print(f"🔄 发送降级请求: {patch_url}")
-        
-        patch_resp = session.patch(
-            patch_url, 
-            headers=headers, 
-            json={"role": "standard-user"},
-            timeout=15
-        )
-        
-        if patch_resp.status_code == 200:
-            result = patch_resp.json()
-            new_role = result.get("role", "unknown")
-            print(f"✅ 降级成功: {new_role}")
-            return jsonify({
-                "code": 200, 
-                "success": True, 
-                "message": "降级成功",
-                "data": {"accountId": account_id, "userId": user_id, "newRole": new_role}
-            })
-        else:
+        # 步骤2: 遍历所有 Team ID 进行降级
+        for account_id in team_ids:
             try:
-                error_data = patch_resp.json()
-                error_text = error_data.get("detail") or error_data.get("message") or str(error_data)
-            except:
-                error_text = patch_resp.text[:200]
-            
-            print(f"❌ 降级失败: {patch_resp.status_code} - {error_text}")
-            
-            # 检查是否已经是普通用户
-            if patch_resp.status_code == 400 and ("already" in str(error_text).lower() or "standard" in str(error_text).lower()):
-                return jsonify({
-                    "code": 200, 
-                    "success": True, 
-                    "message": "已经是普通用户 (already standard-user)",
-                    "data": {"accountId": account_id, "userId": user_id, "newRole": "standard-user"}
-                })
+                # 获取该空间下的 User ID
+                me_url = "https://chatgpt.com/backend-api/me"
+                headers["chatgpt-account-id"] = account_id
+                me_resp = session.get(me_url, headers=headers, timeout=15)
                 
-            return jsonify({
-                "code": patch_resp.status_code, 
-                "success": False, 
-                "message": f"降级失败: HTTP {patch_resp.status_code} - {error_text}",
-                "error": error_text
-            })
+                if me_resp.status_code != 200:
+                    results.append(f"[{account_id}] 获取User ID失败 ({me_resp.status_code})")
+                    continue
+                
+                me_data = me_resp.json()
+                user_id = me_data.get("id")
+                
+                if not user_id:
+                    results.append(f"[{account_id}] 未找到User ID")
+                    continue
+                    
+                # 发送降级请求
+                headers["Referer"] = "https://chatgpt.com/"
+                patch_url = f"https://chatgpt.com/backend-api/accounts/{account_id}/users/{user_id}"
+                
+                patch_resp = session.patch(
+                    patch_url, 
+                    headers=headers, 
+                    json={"role": "standard-user"},
+                    timeout=15
+                )
+                
+                if patch_resp.status_code == 200:
+                    result = patch_resp.json()
+                    new_role = result.get("role", "unknown")
+                    results.append(f"[{account_id}] 降级成功 ({new_role})")
+                    success_count += 1
+                else:
+                    try:
+                        error_data = patch_resp.json()
+                        error_text = error_data.get("detail") or error_data.get("message") or str(error_data)
+                    except:
+                        error_text = patch_resp.text[:100]
+                    
+                    if patch_resp.status_code == 400 and ("already" in str(error_text).lower() or "standard" in str(error_text).lower()):
+                         results.append(f"[{account_id}] 已经是普通用户")
+                         success_count += 1
+                    else:
+                        results.append(f"[{account_id}] 失败: {error_text}")
+
+            except Exception as e:
+                results.append(f"[{account_id}] 异常: {str(e)}")
+        
+        # 汇总结果
+        final_message = f"共检测到 {len(team_ids)} 个空间。结果: " + "; ".join(results)
+        print(f"✅ 批量降级完成: {final_message}")
+        
+        return jsonify({
+            "code": 200, 
+            "success": True, 
+            "message": final_message,
+            "data": {
+                "total": len(team_ids), 
+                "success": success_count, 
+                "details": results,
+                "newRole": "standard-user" # 兼容旧字段
+            }
+        })
     
     except Exception as e:
-        print(f"❌ 降级错误: {str(e)}")
+        print(f"❌ 降级流程严重错误: {str(e)}")
         return jsonify({
             "code": 500,
             "success": False,
-            "message": str(e)
+            "message": f"系统错误: {str(e)}"
         }), 500
 
 # ================= 链接兑换API =================
