@@ -719,17 +719,23 @@ def get_members():
             users_data = resp.json()
             members = []
             for u in users_data.get('items', []):
+                # 处理时间戳: 可能为浮点数(170000.0) 或 整数, 甚至 None
+                created_ts = u.get('created')
+                if not created_ts:
+                     created_ts = 0
+                
                 members.append({
                     "email": u.get('email'),
                     "name": u.get('name'),
                     "role": u.get('role'),
-                    "joinedAt": u.get('created', 0)
+                    "joinedAt": int(created_ts) # 确保转换为整数
                 })
             return jsonify({"code": 200, "data": {"members": members}})
         else:
-            return jsonify({"code": resp.status_code, "message": f"Fetch members failed: {resp.text[:100]}"})
+            return jsonify({"code": resp.status_code, "message": f"Fetch members failed: {resp.text[:200]}"})
     except Exception as e:
-        return jsonify({"code": 500, "message": str(e)}), 500
+        print(f"❌ Get members error: {e}")
+        return jsonify({"code": 500, "message": f"Server Error: {str(e)}"}), 500
 
 @app.route('/api/pending-invites', methods=['POST'])
 def get_pending_invites():
