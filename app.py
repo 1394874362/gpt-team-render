@@ -105,9 +105,13 @@ def get_team_id_and_send_invite(token, user_email):
         check_resp = session.get(check_url, headers=headers, timeout=15)
         
         if check_resp.status_code == 401:
+            print(f"❌ Token失效，自动禁用账号...")
+            d1_client.query_d1("UPDATE accounts SET is_active = 0, last_check_status = '失效' WHERE authorization_token = ?", [token])
             return False, "Token失效", 401
         if check_resp.status_code == 403:
-            return False, "IP被封", 403
+            # 403 可能是 IP 问题，但也可能是账号问题，保险起见也可以标记，或者只记录
+            print(f"❌ IP被封/权限不足 (403)...")
+            return False, "IP被封或权限不足", 403
         if check_resp.status_code != 200:
             return False, f"获取Team ID失败: HTTP {check_resp.status_code}", check_resp.status_code
         
@@ -143,6 +147,7 @@ def get_team_id_and_send_invite(token, user_email):
         if invite_resp.status_code == 200:
             res_json = invite_resp.json()
             if "account_invites" in res_json or "invites" in res_json:
+                d1_client.query_d1("UPDATE accounts SET used_invites = used_invites + 1, last_check_status = '成功', last_check_time = datetime('now') WHERE authorization_token = ?", [token])
                 return True, "邀请发送成功", None
             
             err_msg = str(res_json)
@@ -159,6 +164,10 @@ def get_team_id_and_send_invite(token, user_email):
             except:
                 error_msg = invite_resp.text[:100]
             
+            if invite_resp.status_code == 401:
+                 print(f"❌ 邀请时Token失效，自动禁用账号...")
+                 d1_client.query_d1("UPDATE accounts SET is_active = 0, last_check_status = '失效' WHERE authorization_token = ?", [token])
+
             return False, f"HTTP {invite_resp.status_code}: {error_msg}", invite_resp.status_code
 
     except Exception as e:
@@ -285,23 +294,38 @@ def handle_email(message):
     # 发送处理中提示
     processing_msg = bot.reply_to(message, f"⏳ 正在发送邀请到 `{email}`...", parse_mode='Markdown')
     
+    max_retries = 3
+    attempt = 0
+    final_result_text = ""
+    
     try:
-        # 获取可用 token
-        token = get_available_token()
-        if not token:
-            bot.edit_message_text("❌ 暂无可用账号，请稍后再试", 
-                                message.chat.id, processing_msg.message_id)
-            return
+        while attempt < max_retries:
+            attempt += 1
+            # 获取可用 token
+            token = get_available_token()
+            if not token:
+                bot.edit_message_text("❌ 暂无可用账号，请稍后再试", 
+                                    message.chat.id, processing_msg.message_id)
+                return
+            
+            # 发送邀请
+            success, msg, status_code = get_team_id_and_send_invite(token, email)
+            
+            if success:
+                final_result_text = f"✅ 邀请发送成功！\n\n📧 邮箱：`{email}`\n\n请查收邮件并点击邀请链接加入 Team。"
+                break
+            else:
+                if status_code == 401:
+                    print(f"⚠️ 尝试 {attempt}/{max_retries} 失败: Token失效，已自动禁用账号，重试中...")
+                    continue # Token失效，重试，此时旧Token已被禁用，将获取新Token
+                else:
+                    final_result_text = f"❌ 邀请发送失败\n\n📧 邮箱：`{email}`\n原因：{msg}"
+                    break # 其他错误（如Team已满，邮箱无效等），不重试
         
-        # 发送邀请
-        success, msg, _ = get_team_id_and_send_invite(token, email)
+        if not final_result_text:
+             final_result_text = f"❌ 连续 {max_retries} 次尝试失败，请检查账号池是否耗尽。"
         
-        if success:
-            result_text = f"✅ 邀请发送成功！\n\n📧 邮箱：`{email}`\n\n请查收邮件并点击邀请链接加入 Team。"
-        else:
-            result_text = f"❌ 邀请发送失败\n\n📧 邮箱：`{email}`\n原因：{msg}"
-        
-        bot.edit_message_text(result_text, message.chat.id, processing_msg.message_id, parse_mode='Markdown')
+        bot.edit_message_text(final_result_text, message.chat.id, processing_msg.message_id, parse_mode='Markdown')
         
     except Exception as e:
         bot.edit_message_text(f"❌ 发生错误：{e}", message.chat.id, processing_msg.message_id)
