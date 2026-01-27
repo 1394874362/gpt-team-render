@@ -420,6 +420,38 @@ def check_tg_member():
         }), 500
 
 
+@app.route('/api/verify-link-pwd', methods=['POST'])
+def verify_link_pwd():
+    """验证链接密码"""
+    data = request.json
+    link_code = data.get('link_code') or data.get('linkCode')
+    password = data.get('password')
+    
+    if not link_code:
+        return jsonify({"code": 400, "message": "Missing link code"}), 400
+
+    # 🛡️ 延迟防止爆破
+    import time, random
+    time.sleep(1 + random.random())
+    
+    try:
+        # 查询链接信息
+        link = d1_client.query_d1("SELECT password FROM invite_links WHERE link_code = ?", [link_code])
+        if not link or len(link) == 0:
+            return jsonify({"code": 404, "message": "链接不存在"}), 404
+            
+        db_pwd = link[0].get('password')
+        
+        # 比对密码
+        if db_pwd and str(db_pwd) == str(password):
+            return jsonify({"code": 200, "message": "密码正确"})
+        else:
+            return jsonify({"code": 403, "message": "密码错误"}), 403
+            
+    except Exception as e:
+        print(f"❌ Password check failed: {e}")
+        return jsonify({"code": 500, "message": "验证服务异常"}), 500
+
 @app.route('/api/check-account', methods=['POST'])
 def check_account():
     """检测账号的 ChatGPT Team 空间状态（供 Worker 调用）"""
