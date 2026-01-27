@@ -777,12 +777,22 @@ def get_pending_invites():
         if resp.status_code == 200:
             invites_data = resp.json()
             invites = []
+            if len(invites_data.get('items', [])) > 0:
+                print(f"🔍 [DEBUG] First invite sample: {invites_data.get('items', [])[0]}")
+
             for i in invites_data.get('items', []):
+                # 尝试多种可能的字段名
+                email = i.get('email') or i.get('email_address')
+                if not email and 'user' in i:
+                     email = i['user'].get('email')
+                
                 invites.append({
-                    "email": i.get('email'),
+                    "email": email,
                     "role": i.get('role'),
                     "invitedAt": i.get('created', 0),
-                    "expiresAt": i.get('expires_at', 0)
+                    "expiresAt": i.get('expires_at', 0),
+                    "id": i.get('id'), #添加ID以便取消邀请
+                    "raw": i # 调试用
                 })
             return jsonify({"code": 200, "data": {"invites": invites}})
         else:
