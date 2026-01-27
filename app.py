@@ -377,6 +377,49 @@ def send_invite():
             "data": {"inviteSuccess": False, "error": message}
         }), status_code or 500
 
+@app.route('/api/check-tg-member', methods=['POST'])
+def check_tg_member():
+    """检测用户是否在 Telegram 群组中"""
+    data = request.json
+    tg_user_id = data.get('tg_user_id')
+    tg_group_id = data.get('tg_group_id')
+    
+    if not tg_user_id or not tg_group_id:
+        return jsonify({"code": 400, "is_member": False, "message": "Missing parameters"}), 400
+    
+    try:
+        # 获取成员状态
+        chat_member = bot.get_chat_member(tg_group_id, tg_user_id)
+        status = chat_member.status
+        
+        # 允许的状态: creator, administrator, member, restricted (如果restricted但还没被踢出)
+        # 不允许: left, kicked
+        valid_statuses = ['creator', 'administrator', 'member', 'restricted']
+        
+        if status in valid_statuses:
+            return jsonify({
+                "code": 200, 
+                "is_member": True, 
+                "message": "User is a member",
+                "status": status
+            })
+        else:
+             return jsonify({
+                "code": 200, 
+                "is_member": False, 
+                "message": "User is not a member",
+                "status": status
+            })
+            
+    except Exception as e:
+        print(f"❌ TG Membership check failed: {e}")
+        return jsonify({
+            "code": 500, 
+            "is_member": False, 
+            "message": str(e)
+        }), 500
+
+
 @app.route('/api/check-account', methods=['POST'])
 def check_account():
     """检测账号的 ChatGPT Team 空间状态（供 Worker 调用）"""
