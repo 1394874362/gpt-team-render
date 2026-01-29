@@ -423,12 +423,16 @@ def check_tg_member():
 @app.route('/api/verify-link-pwd', methods=['POST'])
 def verify_link_pwd():
     """验证链接密码"""
+    import hashlib
     data = request.json
     link_code = data.get('link_code') or data.get('linkCode')
     password = data.get('password')
     
     if not link_code:
         return jsonify({"code": 400, "message": "Missing link code"}), 400
+    
+    if not password:
+        return jsonify({"code": 400, "message": "请输入密码"}), 400
 
     # 🛡️ 延迟防止爆破
     import time, random
@@ -436,14 +440,23 @@ def verify_link_pwd():
     
     try:
         # 查询链接信息
-        link = d1_client.query_d1("SELECT password FROM invite_links WHERE link_code = ?", [link_code])
+        link = d1_client.query_d1("SELECT password, password_enabled FROM invite_links WHERE link_code = ? AND is_active = 1", [link_code])
         if not link or len(link) == 0:
-            return jsonify({"code": 404, "message": "链接不存在"}), 404
-            
-        db_pwd = link[0].get('password')
+            return jsonify({"code": 404, "message": "链接不存在或已过期"}), 404
         
-        # 比对密码
-        if db_pwd and str(db_pwd) == str(password):
+        link_data = link[0]
+        db_pwd = link_data.get('password')
+        pwd_enabled = link_data.get('password_enabled', 0)
+        
+        # 如果没有启用密码保护，直接通过
+        if not pwd_enabled or not db_pwd:
+            return jsonify({"code": 200, "message": "验证成功"})
+        
+        # 对用户输入进行 SHA-256 哈希
+        input_hash = hashlib.sha256(password.encode()).hexdigest()
+        
+        # 比对哈希值
+        if input_hash == db_pwd:
             return jsonify({"code": 200, "message": "密码正确"})
         else:
             return jsonify({"code": 403, "message": "密码错误"}), 403
