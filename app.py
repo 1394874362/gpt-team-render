@@ -1298,8 +1298,7 @@ def codex_chat():
     print(f"🤖 [Codex] 收到聊天请求, model={model}, stream={stream}")
     
     session = cffi_requests.Session(impersonate="chrome120")
-    # 临时禁用代理测试 - 看看是否是代理IP的问题
-    # session.proxies = {"http": PROXY_URL, "https": PROXY_URL}
+    session.proxies = {"http": PROXY_URL, "https": PROXY_URL}
     
     fake_device_id = str(uuid.uuid4())
     headers = {
