@@ -522,8 +522,19 @@ def check_account():
         data = check_resp.json()
         accounts_dict = data.get("accounts", {})
         
-        # 🔍 打印原始响应用于调试
-        print(f"🔍 [check-account] 原始响应: {json.dumps(data, indent=2, default=str)[:2000]}")
+        # 🔍 打印完整原始响应用于调试（限制长度避免日志过大）
+        print(f"🔍 [check-account] 完整原始响应结构:")
+        for acc_id, info in accounts_dict.items():
+            print(f"🔍 [check-account] Account ID: {acc_id}")
+            print(f"🔍 [check-account] Account Info Keys: {list(info.keys())}")
+            account_info = info.get("account", {})
+            print(f"🔍 [check-account] Account Sub-Keys: {list(account_info.keys())}")
+            # 打印每个可能包含到期时间的字段
+            for key in ["entitlement", "subscription", "billing_info", "last_active_subscription", "features", "plan"]:
+                if key in info:
+                    print(f"🔍 [check-account] {key}: {json.dumps(info[key], default=str)[:300]}")
+                if key in account_info:
+                    print(f"🔍 [check-account] account.{key}: {json.dumps(account_info[key], default=str)[:300]}")
         
         # 统计 Team 账号
         team_accounts = []
@@ -564,16 +575,18 @@ def check_account():
                     expires_at = last_sub.get("expires_at") or last_sub.get("current_period_end")
                     print(f"🔍 [check-account] last_active_subscription: {last_sub}")
             
-            # 5. 尝试调用订阅API获取到期时间
+            # 5. 尝试调用多个API获取到期时间
             if not expires_at and (acc_id.startswith("org-") or "team" in plan_type.lower()):
+                sub_headers = headers.copy()
+                sub_headers["chatgpt-account-id"] = acc_id
+                
+                # 5.1 尝试 /subscriptions API
                 try:
-                    sub_headers = headers.copy()
-                    sub_headers["chatgpt-account-id"] = acc_id
                     sub_url = f"https://chatgpt.com/backend-api/accounts/{acc_id}/subscriptions"
                     sub_resp = session.get(sub_url, headers=sub_headers, timeout=10)
                     if sub_resp.status_code == 200:
                         sub_data = sub_resp.json()
-                        print(f"🔍 [check-account] 订阅API响应: {sub_data}")
+                        print(f"🔍 [check-account] 订阅API响应: {json.dumps(sub_data, default=str)[:500]}")
                         # 尝试从订阅数据中提取到期时间
                         if isinstance(sub_data, dict):
                             expires_at = sub_data.get("expires_at") or sub_data.get("current_period_end") or sub_data.get("billing_cycle_end")
@@ -585,6 +598,41 @@ def check_account():
                             expires_at = first_sub.get("expires_at") or first_sub.get("current_period_end")
                 except Exception as sub_e:
                     print(f"⚠️ [check-account] 获取订阅信息失败: {sub_e}")
+                
+                # 5.2 尝试 /billing API (更可能有到期时间)
+                if not expires_at:
+                    try:
+                        billing_url = f"https://chatgpt.com/backend-api/accounts/{acc_id}/billing"
+                        billing_resp = session.get(billing_url, headers=sub_headers, timeout=10)
+                        if billing_resp.status_code == 200:
+                            billing_data = billing_resp.json()
+                            print(f"🔍 [check-account] Billing API响应: {json.dumps(billing_data, default=str)[:500]}")
+                            # 尝试从billing数据中提取到期时间
+                            if isinstance(billing_data, dict):
+                                expires_at = billing_data.get("expires_at") or billing_data.get("current_period_end") or billing_data.get("next_billing_date")
+                                # 检查 subscription 子对象
+                                if not expires_at and "subscription" in billing_data:
+                                    sub_info = billing_data["subscription"]
+                                    expires_at = sub_info.get("expires_at") or sub_info.get("current_period_end") or sub_info.get("end_date")
+                                # 检查 plan 子对象
+                                if not expires_at and "plan" in billing_data:
+                                    plan_info = billing_data["plan"]
+                                    expires_at = plan_info.get("expires_at") or plan_info.get("current_period_end")
+                    except Exception as billing_e:
+                        print(f"⚠️ [check-account] 获取Billing信息失败: {billing_e}")
+                
+                # 5.3 尝试 /payment-info API
+                if not expires_at:
+                    try:
+                        payment_url = f"https://chatgpt.com/backend-api/accounts/{acc_id}/payment-info"
+                        payment_resp = session.get(payment_url, headers=sub_headers, timeout=10)
+                        if payment_resp.status_code == 200:
+                            payment_data = payment_resp.json()
+                            print(f"🔍 [check-account] Payment API响应: {json.dumps(payment_data, default=str)[:500]}")
+                            if isinstance(payment_data, dict):
+                                expires_at = payment_data.get("expires_at") or payment_data.get("current_period_end") or payment_data.get("next_payment_date")
+                    except Exception as payment_e:
+                        print(f"⚠️ [check-account] 获取Payment信息失败: {payment_e}")
             
             if not is_deactivated:
                 if "team" in plan_type.lower() or acc_id.startswith("org-"):
