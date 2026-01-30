@@ -30,12 +30,12 @@ def after_request(response):
 # ================= 🔧 配置区 =================
 PORT = int(os.environ.get("PORT", 5000))
 
-# SOCKS5代理配置
-PROXY_HOST = "170.130.97.208"
-PROXY_PORT = "443"
-PROXY_USER = "JgshZqSGcwhW"
-PROXY_PASS = "8avHcan293"
-PROXY_URL = f"socks5://{PROXY_USER}:{PROXY_PASS}@{PROXY_HOST}:{PROXY_PORT}"
+# HTTP代理配置（动态IP）
+PROXY_HOST = "na.ec39f792e12ce1b7.ipmars.vip"
+PROXY_PORT = "4900"
+PROXY_USER = "CCCRqQ7zTT-zone-mars-region-US-session-8zHiWYyc-sessTime-2"
+PROXY_PASS = "98514780"
+PROXY_URL = f"http://{PROXY_USER}:{PROXY_PASS}@{PROXY_HOST}:{PROXY_PORT}"
 
 # Telegram Bot 配置
 BOT_TOKEN = os.environ.get("BOT_TOKEN", "8153657926:AAFs1MjKEEXrVIOrjn7H6a_DDgmcWMSBT3k")
