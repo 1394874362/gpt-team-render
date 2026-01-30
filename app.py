@@ -522,6 +522,9 @@ def check_account():
         data = check_resp.json()
         accounts_dict = data.get("accounts", {})
         
+        # 🔍 打印原始响应用于调试
+        print(f"🔍 [check-account] 原始响应: {json.dumps(data, indent=2, default=str)[:2000]}")
+        
         # 统计 Team 账号
         team_accounts = []
         first_expires_at = None  # 记录第一个Team的到期时间
@@ -531,24 +534,57 @@ def check_account():
             is_deactivated = account_info.get("is_deactivated", True)
             plan_type = account_info.get("plan_type", "")
             
-            # 尝试提取订阅到期时间
-            # ChatGPT API 可能在多个位置返回到期时间
+            # 🔥 尝试从多个位置提取订阅到期时间
             expires_at = None
+            
+            # 1. 从 entitlement 获取
             entitlement = info.get("entitlement", {})
             if entitlement:
-                expires_at = entitlement.get("expires_at")
+                expires_at = entitlement.get("expires_at") or entitlement.get("subscription_expires_at")
+                print(f"🔍 [check-account] entitlement: {entitlement}")
             
-            # 也尝试从 subscription 获取
+            # 2. 从 account.subscription 获取
             if not expires_at:
                 subscription = account_info.get("subscription", {})
                 if subscription:
-                    expires_at = subscription.get("expires_at") or subscription.get("current_period_end")
+                    expires_at = subscription.get("expires_at") or subscription.get("current_period_end") or subscription.get("end_date")
+                    print(f"🔍 [check-account] subscription: {subscription}")
             
-            # 也尝试从 billing_info 获取
+            # 3. 从 account.billing_info 获取
             if not expires_at:
                 billing_info = account_info.get("billing_info", {})
                 if billing_info:
                     expires_at = billing_info.get("expires_at") or billing_info.get("current_period_end")
+            
+            # 4. 从 features 或 last_active_subscription 获取
+            if not expires_at:
+                features = info.get("features", [])
+                last_sub = info.get("last_active_subscription", {})
+                if last_sub:
+                    expires_at = last_sub.get("expires_at") or last_sub.get("current_period_end")
+                    print(f"🔍 [check-account] last_active_subscription: {last_sub}")
+            
+            # 5. 尝试调用订阅API获取到期时间
+            if not expires_at and (acc_id.startswith("org-") or "team" in plan_type.lower()):
+                try:
+                    sub_headers = headers.copy()
+                    sub_headers["chatgpt-account-id"] = acc_id
+                    sub_url = f"https://chatgpt.com/backend-api/accounts/{acc_id}/subscriptions"
+                    sub_resp = session.get(sub_url, headers=sub_headers, timeout=10)
+                    if sub_resp.status_code == 200:
+                        sub_data = sub_resp.json()
+                        print(f"🔍 [check-account] 订阅API响应: {sub_data}")
+                        # 尝试从订阅数据中提取到期时间
+                        if isinstance(sub_data, dict):
+                            expires_at = sub_data.get("expires_at") or sub_data.get("current_period_end") or sub_data.get("billing_cycle_end")
+                            if not expires_at and "subscription" in sub_data:
+                                sub_info = sub_data["subscription"]
+                                expires_at = sub_info.get("expires_at") or sub_info.get("current_period_end")
+                        elif isinstance(sub_data, list) and len(sub_data) > 0:
+                            first_sub = sub_data[0]
+                            expires_at = first_sub.get("expires_at") or first_sub.get("current_period_end")
+                except Exception as sub_e:
+                    print(f"⚠️ [check-account] 获取订阅信息失败: {sub_e}")
             
             if not is_deactivated:
                 if "team" in plan_type.lower() or acc_id.startswith("org-"):
@@ -558,6 +594,10 @@ def check_account():
                         "name": account_info.get("structure", "unknown"),
                         "expires_at": expires_at
                     })
+                    # 记录第一个Team的到期时间
+                    if expires_at and not first_expires_at:
+                        first_expires_at = expires_at
+                        print(f"✅ [check-account] 找到到期时间: {expires_at}")
                     # 记录第一个Team的到期时间
                     if expires_at and not first_expires_at:
                         first_expires_at = expires_at
