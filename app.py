@@ -873,6 +873,63 @@ def auto_import():
             if new_acc and len(new_acc) > 0:
                 acc_id = new_acc[0].get('id')
                 print(f"✅ 新账号已创建: {acc_id}")
+                
+                # 🔥 立即检测账号状态并获取到期时间
+                try:
+                    # 调用内部的 check_account 逻辑
+                    session = cffi_requests.Session(impersonate="chrome120")
+                    session.proxies = {"http": PROXY_URL, "https": PROXY_URL}
+                    
+                    fake_device_id = str(uuid.uuid4())
+                    headers = {
+                        "Authorization": f"Bearer {token}" if not token.startswith("Bearer") else token,
+                        "Content-Type": "application/json",
+                        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+                        "oai-device-id": fake_device_id,
+                        "oai-language": "en-US",
+                        "Referer": "https://chatgpt.com/",
+                        "Origin": "https://chatgpt.com"
+                    }
+                    
+                    check_url = "https://chatgpt.com/backend-api/accounts/check/v4-2023-04-27"
+                    check_resp = session.get(check_url, headers=headers, timeout=15)
+                    
+                    if check_resp.status_code == 200:
+                        check_data = check_resp.json()
+                        accounts_dict = check_data.get("accounts", {})
+                        
+                        # 查找到期时间
+                        expires_at = None
+                        for acc_id_key, info in accounts_dict.items():
+                            account_info = info.get("account", {})
+                            plan_type = account_info.get("plan_type", "")
+                            
+                            # 尝试从多个位置获取到期时间
+                            entitlement = info.get("entitlement", {})
+                            if entitlement:
+                                expires_at = entitlement.get("expires_at") or entitlement.get("subscription_expires_at")
+                            
+                            if not expires_at:
+                                subscription = account_info.get("subscription", {})
+                                if subscription:
+                                    expires_at = subscription.get("expires_at") or subscription.get("current_period_end")
+                            
+                            if not expires_at:
+                                last_sub = info.get("last_active_subscription", {})
+                                if last_sub:
+                                    expires_at = last_sub.get("expires_at") or last_sub.get("current_period_end")
+                            
+                            if expires_at:
+                                break
+                        
+                        if expires_at:
+                            d1_client.query_d1("UPDATE accounts SET expires_at = ? WHERE id = ?", [expires_at, acc_id])
+                            print(f"📅 到期时间已更新: {expires_at}")
+                        else:
+                            print(f"⚠️ 未能获取到期时间")
+                except Exception as check_e:
+                    print(f"⚠️ 检测到期时间失败: {check_e}")
+                
                 return jsonify({
                     "success": True,
                     "action": "created",
