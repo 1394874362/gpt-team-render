@@ -210,6 +210,19 @@ def get_available_account():
         """)
         return cursor.fetchone()
 
+def add_account(name, account_id, authorization_token, is_active=True, max_invites=8):
+    """添加新账号"""
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            INSERT INTO accounts 
+            (name, account_id, authorization_token, is_active, max_invites, 
+             used_invites, rotation_count, current_rotation, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, 0, 1, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+        """, (name, account_id, authorization_token, 1 if is_active else 0, max_invites))
+        conn.commit()
+        return cursor.lastrowid
+
 def create_session(account_id, team_id, token, email, validity_type, link_code=None, promoter_id=None, referral_code=None):
     """创建会话"""
     session_id = generate_session_id()
