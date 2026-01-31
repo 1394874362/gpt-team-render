@@ -54,10 +54,11 @@ def request_with_retry(func, *args, max_retries=3, **kwargs):
 
 
 class EmailVerifier:
-    """邮件验证器"""
+    """邮件验证器 - 不使用代理直连邮件API"""
     
     def __init__(self, email: str):
         self.email = email
+        # 邮件API不需要代理，直连更稳定
         self.client = httpx.Client(timeout=30.0, verify=False)
     
     def wait_for_verification_email(self) -> Optional[str]:
@@ -129,11 +130,21 @@ class ChatGPTReg:
     """ChatGPT 注册器 - 完整 OAuth 流程"""
     
     def __init__(self, proxy: str = PROXY_URL):
-        self.session = curl_requests.Session(
-            impersonate="chrome120",
-            verify=False,
-            proxies={"http": proxy, "https": proxy} if proxy else {}
-        )
+        # 尝试创建带代理的会话，如果失败则不用代理
+        try:
+            self.session = curl_requests.Session(
+                impersonate="chrome120",
+                verify=False,
+                proxies={"http": proxy, "https": proxy} if proxy else {},
+                timeout=30
+            )
+        except Exception as e:
+            # 代理失败，尝试不用代理
+            self.session = curl_requests.Session(
+                impersonate="chrome120",
+                verify=False,
+                timeout=30
+            )
         
         self.auth_session_logging_id = str(uuid.uuid4())
         self.oai_did = ""
@@ -143,7 +154,7 @@ class ChatGPTReg:
     def init_session(self) -> bool:
         """初始化会话，获取 csrf token"""
         try:
-            resp = request_with_retry(self.session.get, "https://chatgpt.com")
+            resp = self.session.get("https://chatgpt.com", timeout=30)
             if resp.status_code != 200:
                 return False
 
@@ -157,12 +168,12 @@ class ChatGPTReg:
             else:
                 return False
 
-            request_with_retry(
-                self.session.get, 
-                f"https://chatgpt.com/auth/login?openaicom-did={self.oai_did}"
+            self.session.get(
+                f"https://chatgpt.com/auth/login?openaicom-did={self.oai_did}",
+                timeout=30
             )
             return True
-        except:
+        except Exception as e:
             return False
 
     def get_authorize_url(self, email: str) -> bool:
