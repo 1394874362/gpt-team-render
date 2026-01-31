@@ -318,13 +318,25 @@ def cmd_register(message):
             bot.send_message(message.chat.id, f"🔑 {password}")
             bot.send_message(message.chat.id, f"🎫 {token[:80]}")
         else:
-            # 注册失败
-            error_msg = result.get("error", "未知错误")[:100]
-            bot.edit_message_text(f"❌ 失败: {error_msg}", message.chat.id, processing_msg.message_id)
+            # 注册失败 - 截取错误信息避免太长
+            error_msg = result.get("error", "未知错误")
+            if len(error_msg) > 50:
+                error_msg = error_msg[:50] + "..."
+            try:
+                bot.edit_message_text(f"❌ 失败: {error_msg}", message.chat.id, processing_msg.message_id)
+            except:
+                bot.edit_message_text("❌ 注册失败", message.chat.id, processing_msg.message_id)
             
     except Exception as e:
-        error_text = str(e)[:100]
-        bot.edit_message_text(f"❌ 异常: {error_text}", message.chat.id, processing_msg.message_id)
+        # 截取错误信息，避免 MESSAGE_TOO_LONG
+        error_text = str(e)
+        if len(error_text) > 50:
+            error_text = error_text[:50] + "..."
+        try:
+            bot.edit_message_text(f"❌ 异常: {error_text}", message.chat.id, processing_msg.message_id)
+        except:
+            # 如果还是太长，发送最简消息
+            bot.edit_message_text("❌ 注册失败", message.chat.id, processing_msg.message_id)
 
 
 @bot.message_handler(func=lambda m: EMAIL_REGEX.match(m.text.strip()) if m.text else False)
