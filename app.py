@@ -203,7 +203,7 @@ def cmd_start(message):
     if is_whitelisted(user_id):
         text = "🎉 欢迎使用 ChatGPT Team 邀请机器人\n\n✅ 您已在白名单中\n\n使用方法：直接发送邮箱地址即可获取邀请\n\n例如：test@gmail.com"
     elif is_admin(user_id):
-        text = "👑 管理员面板\n\n可用命令：\n/register - 注册新账号\n/add - 添加白名单\n/remove - 移除白名单\n/list - 查看白名单\n\n直接发送邮箱可发送邀请"
+        text = "👑 管理员面板\n\n可用命令：\n/add - 添加白名单\n/remove - 移除白名单\n/list - 查看白名单\n\n直接发送邮箱可发送邀请"
     else:
         text = f"👋 欢迎使用 ChatGPT Team 邀请机器人\n\n⚠️ 您暂未获得使用权限\n\n您的用户ID：{user_id}"
     
@@ -272,72 +272,6 @@ def cmd_list(message):
         bot.reply_to(message, f"📋 白名单用户（共 {len(whitelist)} 人）：\n\n{user_list}")
     else:
         bot.reply_to(message, "📋 白名单为空")
-
-@bot.message_handler(commands=['register'])
-def cmd_register(message):
-    """注册 ChatGPT 账号"""
-    user_id = message.from_user.id
-    if not is_admin(user_id):
-        bot.reply_to(message, "❌ 您没有管理员权限")
-        return
-    
-    # 发送处理中提示
-    processing_msg = bot.reply_to(message, "⏳ 注册中...")
-    
-    try:
-        # 导入注册模块
-        import register_bot
-        
-        # 执行注册
-        result = register_bot.register_chatgpt_account()
-        
-        if result["success"]:
-            # 注册成功
-            email = result["email"]
-            password = result["password"]
-            token = result["token"]
-            
-            # 保存到数据库
-            try:
-                db.add_account(
-                    name=email,
-                    account_id=email,
-                    authorization_token=f"Bearer {token}",
-                    is_active=True,
-                    max_invites=8
-                )
-                db_status = "已保存"
-            except Exception as e:
-                db_status = "保存失败"
-            
-            # 编辑原消息
-            bot.edit_message_text(f"✅ 注册成功 ({db_status})", message.chat.id, processing_msg.message_id)
-            
-            # 分3条短消息发送
-            bot.send_message(message.chat.id, f"📧 {email}")
-            bot.send_message(message.chat.id, f"🔑 {password}")
-            bot.send_message(message.chat.id, f"🎫 {token[:80]}")
-        else:
-            # 注册失败 - 截取错误信息避免太长
-            error_msg = result.get("error", "未知错误")
-            if len(error_msg) > 50:
-                error_msg = error_msg[:50] + "..."
-            try:
-                bot.edit_message_text(f"❌ 失败: {error_msg}", message.chat.id, processing_msg.message_id)
-            except:
-                bot.edit_message_text("❌ 注册失败", message.chat.id, processing_msg.message_id)
-            
-    except Exception as e:
-        # 截取错误信息，避免 MESSAGE_TOO_LONG
-        error_text = str(e)
-        if len(error_text) > 50:
-            error_text = error_text[:50] + "..."
-        try:
-            bot.edit_message_text(f"❌ 异常: {error_text}", message.chat.id, processing_msg.message_id)
-        except:
-            # 如果还是太长，发送最简消息
-            bot.edit_message_text("❌ 注册失败", message.chat.id, processing_msg.message_id)
-
 
 @bot.message_handler(func=lambda m: EMAIL_REGEX.match(m.text.strip()) if m.text else False)
 def handle_email(message):
