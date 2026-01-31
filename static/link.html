@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ChatGPT Team 邀请</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+
+<body class="min-h-screen bg-gradient-to-br from-indigo-50 via-white to-purple-50">
+    <div class="min-h-screen flex items-center justify-center px-6 py-12">
+        <div class="w-full max-w-md">
+            <!-- Logo/标题区域 -->
+            <div class="text-center mb-8">
+                <div
+                    class="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-2xl mb-4 shadow-lg">
+                    <svg class="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z">
+                        </path>
+                    </svg>
+                </div>
+                <h1
+                    class="text-3xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
+                    ChatGPT Team 邀请
+                </h1>
+                <p id="linkInfo" class="text-gray-500 mt-2">正在加载链接信息...</p>
+            </div>
+
+            <!-- 邀请表单 -->
+            <div id="formContainer" class="bg-white rounded-2xl shadow-xl p-8 border border-gray-100">
+                <form id="inviteForm" class="space-y-6">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">邮箱地址 *</label>
+                        <input type="email" id="email" required placeholder="请输入您的邮箱"
+                            class="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all">
+                    </div>
+
+                    <div id="promoterSection" class="hidden">
+                        <label class="block text-sm font-medium text-gray-700 mb-2">推广码 (可选)</label>
+                        <input type="text" id="referralCode" placeholder="填写推广码支持您喜欢的推广员"
+                            class="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all">
+                    </div>
+
+                    <button type="submit" id="submitBtn"
+                        class="w-full py-3 bg-gradient-to-r from-indigo-500 to-purple-600 text-white font-semibold rounded-xl hover:from-indigo-600 hover:to-purple-700 transition-all transform hover:scale-[1.02] shadow-lg">
+                        获取邀请
+                    </button>
+                </form>
+
+                <!-- 状态提示 -->
+                <div id="statusMessage" class="hidden mt-4 p-4 rounded-xl text-center"></div>
+            </div>
+
+            <!-- 错误页面 -->
+            <div id="errorContainer"
+                class="hidden bg-white rounded-2xl shadow-xl p-8 border border-gray-100 text-center">
+                <div class="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <svg class="w-8 h-8 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12">
+                        </path>
+                    </svg>
+                </div>
+                <h2 class="text-xl font-bold text-gray-800 mb-2">链接无效</h2>
+                <p id="errorMessage" class="text-gray-500">此邀请链接不存在或已过期</p>
+            </div>
+
+            <!-- 成功页面 -->
+            <div id="successContainer"
+                class="hidden bg-white rounded-2xl shadow-xl p-8 border border-gray-100 text-center">
+                <div class="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <svg class="w-8 h-8 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                    </svg>
+                </div>
+                <h2 class="text-xl font-bold text-gray-800 mb-2">邀请发送成功！</h2>
+                <p class="text-gray-500">请查收您的邮箱，点击邀请链接加入 Team</p>
+            </div>
+
+            <!-- 底部信息 -->
+            <p class="text-center text-gray-400 text-sm mt-6">
+                GPT Team Invite System - Powered by Render
+            </p>
+        </div>
+    </div>
+
+    <script>
+        // ✅ 新配置：指向Render服务（完全脱离Cloudflare）
+        const API_BASE = window.location.origin; // 使用当前域名（Render）
+
+        // 从URL获取链接代码
+        const pathParts = window.location.pathname.split('/');
+        let linkCode = pathParts[pathParts.length - 1];
+        // 如果路径末尾是'link'或空，则从query参数获取
+        if (!linkCode || linkCode === 'link' || linkCode === 'link.html') {
+            linkCode = new URLSearchParams(window.location.search).get('code');
+        }
+
+        let linkData = null;
+
+        // 页面加载时获取链接信息
+        async function init() {
+            if (!linkCode) {
+                showError('缺少链接代码');
+                return;
+            }
+
+            try {
+                const res = await fetch(`${API_BASE}/api/link-info?code=${linkCode}`);
+                const data = await res.json();
+
+                if (data.code === 200 && data.data) {
+                    linkData = data.data;
+                    document.getElementById('linkInfo').textContent =
+                        `${linkData.name} · ${getValidityText(linkData.validityType)} · 剩余 ${linkData.remainingUses || (linkData.maxUses - linkData.usedCount)} 次`;
+                    document.getElementById('formContainer').classList.remove('hidden');
+                } else {
+                    showError(data.message || '链接不存在或已失效');
+                }
+            } catch (error) {
+                showError('网络错误，请稍后重试');
+            }
+        }
+
+        // 显示错误
+        function showError(message) {
+            document.getElementById('formContainer').classList.add('hidden');
+            document.getElementById('errorContainer').classList.remove('hidden');
+            document.getElementById('errorMessage').textContent = message;
+            document.getElementById('linkInfo').textContent = '';
+        }
+
+        // 显示成功
+        function showSuccess() {
+            document.getElementById('formContainer').classList.add('hidden');
+            document.getElementById('successContainer').classList.remove('hidden');
+        }
+
+        // 显示状态消息
+        function showStatus(message, isError = false) {
+            const el = document.getElementById('statusMessage');
+            el.textContent = message;
+            el.className = `mt-4 p-4 rounded-xl text-center ${isError ? 'bg-red-50 text-red-600' : 'bg-blue-50 text-blue-600'}`;
+            el.classList.remove('hidden');
+        }
+
+        // 表单提交
+        document.getElementById('inviteForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const email = document.getElementById('email').value.trim();
+            const referralCode = document.getElementById('referralCode').value.trim();
+            const submitBtn = document.getElementById('submitBtn');
+
+            if (!email) {
+                showStatus('请输入邮箱地址', true);
+                return;
+            }
+
+            submitBtn.disabled = true;
+            submitBtn.textContent = '发送中...';
+            showStatus('正在发送邀请，请稍候...');
+
+            try {
+                // 步骤1: 验证链接并获取sessionId（不再暴露token）
+                const redeemRes = await fetch(`${API_BASE}/api/redeem-link`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ linkCode, email, referralCode })
+                });
+                const redeemData = await redeemRes.json();
+
+                if (redeemData.code !== 200) {
+                    throw new Error(redeemData.message || '链接兑换失败');
+                }
+
+                const { sessionId } = redeemData.data;
+
+                // 步骤2: 使用sessionId调用安全邀请API 🔐
+                showStatus('正在发送邀请邮件...');
+                const inviteRes = await fetch(`${API_BASE}/api/send-invite-secure`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        sessionId,
+                        email
+                    })
+                });
+                const inviteResult = await inviteRes.json();
+
+                // 步骤3: 处理结果
+                if (inviteResult.code === 200 && inviteResult.data?.inviteSuccess) {
+                    showSuccess();
+                } else {
+                    const errorMsg = inviteResult.data?.error || inviteResult.message || '邀请发送失败';
+                    showStatus(errorMsg, true);
+                    submitBtn.disabled = false;
+                    submitBtn.textContent = '重新发送';
+                }
+
+            } catch (error) {
+                showStatus(error.message || '网络错误，请稍后重试', true);
+                submitBtn.disabled = false;
+                submitBtn.textContent = '重新发送';
+            }
+        });
+
+        function getValidityText(t) {
+            return { once: '一次性', month: '月卡', quarter: '季卡', year: '年卡', permanent: '永久' }[t] || t;
+        }
+
+        // 初始化
+        init();
+    </script>
+</body>
+
+</html>
