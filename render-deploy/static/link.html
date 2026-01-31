@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ChatGPT Team 邀请</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .hover-scale {
+            transition: transform 0.2s;
+        }
+
+        .hover-scale:hover {
+            transform: scale(1.02);
+        }
+    </style>
+</head>
+
+<body class="min-h-screen bg-gradient-to-br from-indigo-50 via-white to-purple-50">
+
+    <!-- 🔒 密码保护弹窗 (默认显示) -->
+    <div id="passwordModal" class="fixed inset-0 z-50 flex items-center justify-center bg-gray-50/90 backdrop-blur-sm">
+        <div
+            class="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-sm border border-gray-100 transform transition-all">
+            <div class="text-center mb-6">
+                <div class="w-16 h-16 bg-blue-50 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <svg class="w-8 h-8 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z">
+                        </path>
+                    </svg>
+                </div>
+                <h2 class="text-xl font-bold text-gray-800">请输入密码</h2>
+                <p class="text-gray-500 text-sm mt-1">如需获取密码请加入TG群聊获取</p>
+            </div>
+
+            <form id="passwordForm" class="space-y-6">
+                <div>
+                    <input type="password" id="accessPassword" placeholder="请输入密码"
+                        class="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent text-center text-lg tracking-widest transition-all">
+                </div>
+                <button type="submit"
+                    class="w-full py-3 bg-gray-900 text-white font-semibold rounded-xl hover:bg-black transition-all hover-scale shadow-md">
+                    解锁访问
+                </button>
+            </form>
+
+            <div class="relative my-8">
+                <div class="absolute inset-0 flex items-center">
+                    <div class="w-full border-t border-gray-200"></div>
+                </div>
+                <div class="relative flex justify-center text-sm">
+                    <span class="px-2 bg-white text-gray-400">没有密码？</span>
+                </div>
+            </div>
+
+            <a href="https://t.me/your_telegram_group" target="_blank"
+                class="block w-full py-3 bg-[#0088cc] text-white font-semibold rounded-xl hover:bg-[#0077b5] transition-all hover-scale shadow-lg flex items-center justify-center gap-2 group">
+                <!-- Telegram Icon -->
+                <svg class="w-5 h-5 fill-current" viewBox="0 0 24 24">
+                    <path
+                        d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 11.944 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z" />
+                </svg>
+                获取密码
+                <span class="inline-block transition-transform group-hover:translate-x-1">→</span>
+            </a>
+
+        </div>
+    </div>
+
+    <!-- 主容器 -->
+    <div class="min-h-screen flex items-center justify-center px-6 py-12">
+        <div class="w-full max-w-md">
+            <!-- Logo/标题区域 -->
+            <div class="text-center mb-8">
+                <div
+                    class="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-2xl mb-4 shadow-lg">
+                    <svg class="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z">
+                        </path>
+                    </svg>
+                </div>
+                <h1
+                    class="text-3xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
+                    ChatGPT Team 邀请
+                </h1>
+                <p id="linkInfo" class="text-gray-500 mt-2">正在加载链接信息...</p>
+            </div>
+
+            <!-- 邀请表单 -->
+            <div id="formContainer" class="hidden bg-white rounded-2xl shadow-xl p-8 border border-gray-100">
+                <form id="inviteForm" class="space-y-6">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">邮箱地址 *</label>
+                        <input type="email" id="email" required placeholder="请输入您的邮箱"
+                            class="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all">
+                    </div>
+
+                    <div id="promoterSection" class="hidden">
+                        <label class="block text-sm font-medium text-gray-700 mb-2">推广码 (可选)</label>
+                        <input type="text" id="referralCode" placeholder="填写推广码支持您喜欢的推广员"
+                            class="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all">
+                    </div>
+
+                    <button type="submit" id="submitBtn"
+                        class="w-full py-3 bg-gradient-to-r from-indigo-500 to-purple-600 text-white font-semibold rounded-xl hover:from-indigo-600 hover:to-purple-700 transition-all transform hover:scale-[1.02] shadow-lg">
+                        获取邀请
+                    </button>
+                </form>
+
+                <!-- 状态提示 -->
+                <div id="statusMessage" class="hidden mt-4 p-4 rounded-xl text-center"></div>
+            </div>
+
+            <!-- 错误页面 -->
+            <div id="errorContainer"
+                class="hidden bg-white rounded-2xl shadow-xl p-8 border border-gray-100 text-center">
+                <div class="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <svg class="w-8 h-8 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12">
+                        </path>
+                    </svg>
+                </div>
+                <h2 class="text-xl font-bold text-gray-800 mb-2">链接无效</h2>
+                <p id="errorMessage" class="text-gray-500">此邀请链接不存在或已过期</p>
+            </div>
+
+            <!-- 成功页面 -->
+            <div id="successContainer"
+                class="hidden bg-white rounded-2xl shadow-xl p-8 border border-gray-100 text-center">
+                <div class="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <svg class="w-8 h-8 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                    </svg>
+                </div>
+                <h2 class="text-xl font-bold text-gray-800 mb-2">邀请发送成功！</h2>
+                <p class="text-gray-500">请查收您的邮箱，点击邀请链接加入 Team</p>
+            </div>
+
+            <!-- 底部信息 -->
+            <p class="text-center text-gray-400 text-sm mt-6">
+                GPT Team Invite System
+            </p>
+        </div>
+    </div>
+
+    <script>
+        // ✅ 配置
+        const API_BASE = 'https://gpt-invite-worker.2804402637.workers.dev';
+        // 🔐 密码验证（服务端验证）
+        document.getElementById('passwordForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const input = document.getElementById('accessPassword').value.trim();
+            const btn = e.target.querySelector('button');
+
+            if (!input) return;
+            btn.disabled = true;
+            btn.textContent = '验证中...';
+
+            try {
+                // 使用 window.location.origin 自动适配当前域名
+                const res = await fetch(window.location.origin + '/api/verify-link-pwd', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ linkCode, password: input })
+                });
+                const data = await res.json();
+
+                if (data.code === 200) {
+                    // 密码正确
+                    document.getElementById('passwordModal').classList.add('hidden', 'opacity-0');
+                    setTimeout(() => document.getElementById('passwordModal').style.display = 'none', 300);
+                    init();
+                } else {
+                    alert(data.message || '密码错误');
+                    const inputEl = document.getElementById('accessPassword');
+                    inputEl.value = '';
+                    inputEl.classList.add('ring-2', 'ring-red-500', 'border-red-500', 'bg-red-50');
+                    setTimeout(() => inputEl.classList.remove('ring-2', 'ring-red-500', 'border-red-500', 'bg-red-50'), 500);
+                }
+            } catch (err) {
+                alert('网络错误，请重试');
+            } finally {
+                btn.disabled = false;
+                btn.textContent = '解锁访问';
+            }
+        });
+
+        // 原有页面逻辑
+        const pathParts = window.location.pathname.split('/');
+        let linkCode = pathParts[pathParts.length - 1];
+        if (!linkCode || linkCode === 'link' || linkCode === 'link.html' || linkCode.includes('.html')) {
+            linkCode = new URLSearchParams(window.location.search).get('code');
+        }
+
+        // 本地测试
+        if (!linkCode && window.location.protocol === 'file:') {
+            // 在密码框验证通过后再弹 prompt
+            // 这里为了简化，我们在 init 里处理
+        }
+
+        let linkData = null;
+
+        async function init() {
+            if (!linkCode) {
+                if (window.location.protocol === 'file:') {
+                    linkCode = prompt('本地测试模式：请输入邀请链接代码(code)', '');
+                }
+                if (!linkCode) {
+                    showError('缺少链接代码'); return;
+                }
+            }
+
+            try {
+                const res = await fetch(`${API_BASE}/api/link-info?code=${linkCode}`);
+                const data = await res.json();
+
+                if (data.code === 200 && data.data) {
+                    linkData = data.data;
+                    document.getElementById('linkInfo').textContent =
+                        `${linkData.name} · ${getValidityText(linkData.validityType)} · 剩余 ${linkData.remainingUses || (linkData.maxUses - linkData.usedCount)} 次`;
+                    document.getElementById('formContainer').classList.remove('hidden');
+                } else {
+                    showError(data.message || '链接不存在或已失效');
+                }
+            } catch (error) {
+                showError('网络错误，请稍后重试');
+            }
+        }
+
+        function showError(message) {
+            document.getElementById('formContainer').classList.add('hidden');
+            document.getElementById('errorContainer').classList.remove('hidden');
+            document.getElementById('errorMessage').textContent = message;
+            document.getElementById('linkInfo').textContent = '';
+        }
+
+        function showSuccess() {
+            document.getElementById('formContainer').classList.add('hidden');
+            document.getElementById('successContainer').classList.remove('hidden');
+        }
+
+        function showStatus(message, isError = false) {
+            const el = document.getElementById('statusMessage');
+            el.textContent = message;
+            el.className = `mt-4 p-4 rounded-xl text-center ${isError ? 'bg-red-50 text-red-600' : 'bg-blue-50 text-blue-600'}`;
+            el.classList.remove('hidden');
+        }
+
+        document.getElementById('inviteForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const email = document.getElementById('email').value.trim();
+            const referralCode = document.getElementById('referralCode').value.trim();
+            const submitBtn = document.getElementById('submitBtn');
+
+            if (!email) { showStatus('请输入邮箱地址', true); return; }
+
+            submitBtn.disabled = true;
+            submitBtn.textContent = '发送中...';
+            showStatus('正在发送邀请，请稍候...');
+
+            try {
+                const redeemRes = await fetch(`${API_BASE}/api/redeem-link`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ linkCode, email, referralCode })
+                });
+                const redeemData = await redeemRes.json();
+
+                if (redeemData.code !== 200) throw new Error(redeemData.message || '链接兑换失败');
+                const { sessionId } = redeemData.data;
+
+                showStatus('正在发送邀请邮件...');
+                const inviteRes = await fetch(`${API_BASE}/api/send-invite-secure`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ sessionId, email })
+                });
+                const inviteResult = await inviteRes.json();
+
+                if (inviteResult.code === 200 && inviteResult.data?.inviteSuccess) {
+                    showSuccess();
+                } else {
+                    const errorMsg = inviteResult.data?.error || inviteResult.message || '邀请发送失败';
+                    showStatus(errorMsg, true);
+                    submitBtn.disabled = false;
+                    submitBtn.textContent = '重新发送';
+                }
+            } catch (error) {
+                showStatus(error.message || '网络错误，请稍后重试', true);
+                submitBtn.disabled = false;
+                submitBtn.textContent = '重新发送';
+            }
+        });
+
+        function getValidityText(t) {
+            return { once: '一次性', month: '月卡', quarter: '季卡', year: '年卡', permanent: '永久' }[t] || t;
+        }
+
+        // 注意：初始化 init() 现在由密码表单提交后调用
+        // init(); 
+    </script>
+</body>
+
+</html>
