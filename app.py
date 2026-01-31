@@ -201,31 +201,13 @@ def get_available_token():
 def cmd_start(message):
     user_id = message.from_user.id
     if is_whitelisted(user_id):
-        text = """🎉 *欢迎使用 ChatGPT Team 邀请机器人！*
-
-✅ 您已在白名单中，可以直接使用。
-
-*使用方法*：直接发送邮箱地址即可获取 Team 邀请。
-
-例如：`test@gmail.com`"""
+        text = "🎉 欢迎使用 ChatGPT Team 邀请机器人\n\n✅ 您已在白名单中\n\n使用方法：直接发送邮箱地址即可获取邀请\n\n例如：test@gmail.com"
     elif is_admin(user_id):
-        text = """👑 *管理员面板*
-
-*可用命令*：
-• `/register` - 注册新的 ChatGPT 账号
-• `/add <用户ID>` - 添加白名单
-• `/remove <用户ID>` - 移除白名单
-• `/list` - 查看白名单
-
-*使用方法*：直接发送邮箱地址即可发送邀请。"""
+        text = "👑 管理员面板\n\n可用命令：\n/register - 注册新账号\n/add - 添加白名单\n/remove - 移除白名单\n/list - 查看白名单\n\n直接发送邮箱可发送邀请"
     else:
-        text = """👋 *欢迎使用 ChatGPT Team 邀请机器人！*
-
-⚠️ 您暂未获得使用权限，请联系管理员添加白名单。
-
-您的用户ID：`{}`""".format(user_id)
+        text = f"👋 欢迎使用 ChatGPT Team 邀请机器人\n\n⚠️ 您暂未获得使用权限\n\n您的用户ID：{user_id}"
     
-    bot.reply_to(message, text, parse_mode='Markdown')
+    bot.reply_to(message, text)
 
 @bot.message_handler(commands=['add'])
 def cmd_add(message):
@@ -237,7 +219,7 @@ def cmd_add(message):
     try:
         args = message.text.split()[1:]
         if not args:
-            bot.reply_to(message, "用法：`/add <用户ID>`\n例如：`/add 123456789`", parse_mode='Markdown')
+            bot.reply_to(message, "用法：/add 用户ID\n例如：/add 123456789")
             return
         
         target_id = int(args[0])
@@ -245,7 +227,7 @@ def cmd_add(message):
         whitelist.add(target_id)
         save_whitelist(whitelist)
         
-        bot.reply_to(message, f"✅ 已添加用户 `{target_id}` 到白名单", parse_mode='Markdown')
+        bot.reply_to(message, f"✅ 已添加用户 {target_id} 到白名单")
     except ValueError:
         bot.reply_to(message, "❌ 用户ID必须是数字")
     except Exception as e:
@@ -261,7 +243,7 @@ def cmd_remove(message):
     try:
         args = message.text.split()[1:]
         if not args:
-            bot.reply_to(message, "用法：`/remove <用户ID>`", parse_mode='Markdown')
+            bot.reply_to(message, "用法：/remove 用户ID")
             return
         
         target_id = int(args[0])
@@ -269,9 +251,9 @@ def cmd_remove(message):
         if target_id in whitelist:
             whitelist.remove(target_id)
             save_whitelist(whitelist)
-            bot.reply_to(message, f"✅ 已从白名单移除用户 `{target_id}`", parse_mode='Markdown')
+            bot.reply_to(message, f"✅ 已从白名单移除用户 {target_id}")
         else:
-            bot.reply_to(message, f"⚠️ 用户 `{target_id}` 不在白名单中", parse_mode='Markdown')
+            bot.reply_to(message, f"⚠️ 用户 {target_id} 不在白名单中")
     except ValueError:
         bot.reply_to(message, "❌ 用户ID必须是数字")
     except Exception as e:
@@ -286,8 +268,8 @@ def cmd_list(message):
     
     whitelist = load_whitelist()
     if whitelist:
-        user_list = '\n'.join([f"• `{uid}`" for uid in sorted(whitelist)])
-        bot.reply_to(message, f"📋 *白名单用户*（共 {len(whitelist)} 人）：\n\n{user_list}", parse_mode='Markdown')
+        user_list = '\n'.join([f"• {uid}" for uid in sorted(whitelist)])
+        bot.reply_to(message, f"📋 白名单用户（共 {len(whitelist)} 人）：\n\n{user_list}")
     else:
         bot.reply_to(message, "📋 白名单为空")
 
@@ -353,11 +335,11 @@ def handle_email(message):
     
     # 检查白名单
     if not is_whitelisted(user_id):
-        bot.reply_to(message, "❌ 您没有使用权限，请联系管理员添加白名单。\n\n您的用户ID：`{}`".format(user_id), parse_mode='Markdown')
+        bot.reply_to(message, f"❌ 您没有使用权限\n\n您的用户ID：{user_id}")
         return
     
     # 发送处理中提示
-    processing_msg = bot.reply_to(message, f"⏳ 正在发送邀请到 `{email}`...", parse_mode='Markdown')
+    processing_msg = bot.reply_to(message, f"⏳ 正在发送邀请到 {email}...")
     
     max_retries = 3
     attempt = 0
@@ -377,20 +359,20 @@ def handle_email(message):
             success, msg, status_code = get_team_id_and_send_invite(token, email)
             
             if success:
-                final_result_text = f"✅ 邀请发送成功！\n\n📧 邮箱：`{email}`\n\n请查收邮件并点击邀请链接加入 Team。"
+                final_result_text = f"✅ 邀请发送成功\n\n📧 {email}\n\n请查收邮件"
                 break
             else:
                 if status_code == 401:
                     print(f"⚠️ 尝试 {attempt}/{max_retries} 失败: Token失效，已自动禁用账号，重试中...")
                     continue # Token失效，重试，此时旧Token已被禁用，将获取新Token
                 else:
-                    final_result_text = f"❌ 邀请发送失败\n\n📧 邮箱：`{email}`\n原因：{msg}"
+                    final_result_text = f"❌ 邀请发送失败\n\n📧 {email}\n原因：{msg}"
                     break # 其他错误（如Team已满，邮箱无效等），不重试
         
         if not final_result_text:
-             final_result_text = f"❌ 连续 {max_retries} 次尝试失败，请检查账号池是否耗尽。"
+             final_result_text = f"❌ 连续 {max_retries} 次尝试失败"
         
-        bot.edit_message_text(final_result_text, message.chat.id, processing_msg.message_id, parse_mode='Markdown')
+        bot.edit_message_text(final_result_text, message.chat.id, processing_msg.message_id)
         
     except Exception as e:
         bot.edit_message_text(f"❌ 发生错误：{e}", message.chat.id, processing_msg.message_id)
@@ -400,9 +382,9 @@ def handle_other(message):
     if message.text and not message.text.startswith('/'):
         user_id = message.from_user.id
         if is_whitelisted(user_id):
-            bot.reply_to(message, "❓ 请发送有效的邮箱地址获取邀请\n\n例如：`test@gmail.com`", parse_mode='Markdown')
+            bot.reply_to(message, "❓ 请发送有效的邮箱地址\n\n例如：test@gmail.com")
         else:
-            bot.reply_to(message, "❌ 您没有使用权限\n\n您的用户ID：`{}`".format(user_id), parse_mode='Markdown')
+            bot.reply_to(message, f"❌ 您没有使用权限\n\n您的用户ID：{user_id}")
 
 # ================= Flask 路由 =================
 @app.route('/')
