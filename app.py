@@ -201,9 +201,9 @@ def get_available_token():
 def cmd_start(message):
     user_id = message.from_user.id
     if is_whitelisted(user_id):
-        text = "🎉 欢迎使用 ChatGPT Team 邀请机器人\n\n✅ 您已在白名单中\n\n使用方法：直接发送邮箱地址即可获取邀请\n\n例如：test@gmail.com"
+        text = "🎉 欢迎使用 ChatGPT Team 邀请机器人\n\n✅ 您已在白名单中\n\n直接发送邮箱即可获取邀请\n多个邮箱用逗号分隔可批量邀请\n\n输入 /help 查看更多"
     elif is_admin(user_id):
-        text = "👑 管理员面板\n\n可用命令：\n/add - 添加白名单\n/remove - 移除白名单\n/list - 查看白名单\n\n直接发送邮箱可发送邀请"
+        text = "👑 管理员您好\n\n输入 /help 查看所有命令"
     else:
         text = f"👋 欢迎使用 ChatGPT Team 邀请机器人\n\n⚠️ 您暂未获得使用权限\n\n您的用户ID：{user_id}"
     
@@ -273,54 +273,212 @@ def cmd_list(message):
     else:
         bot.reply_to(message, "📋 白名单为空")
 
-@bot.message_handler(func=lambda m: EMAIL_REGEX.match(m.text.strip()) if m.text else False)
+@bot.message_handler(commands=['help'])
+def cmd_help(message):
+    """帮助信息"""
+    user_id = message.from_user.id
+    
+    if is_admin(user_id):
+        text = """📖 使用帮助
+
+👤 用户命令：
+• 直接发送邮箱 - 获取 Team 邀请
+• 多个邮箱用逗号分隔可批量邀请
+
+👑 管理员命令：
+• /status - 查看账号池状态
+• /check - 检测所有账号状态
+• /add 用户ID - 添加白名单
+• /remove 用户ID - 移除白名单
+• /list - 查看白名单"""
+    else:
+        text = """📖 使用帮助
+
+直接发送邮箱地址即可获取 ChatGPT Team 邀请
+
+例如：test@gmail.com
+
+多个邮箱用逗号分隔可批量邀请
+例如：a@gmail.com, b@gmail.com"""
+    
+    bot.reply_to(message, text)
+
+@bot.message_handler(commands=['status'])
+def cmd_status(message):
+    """查看账号池状态"""
+    user_id = message.from_user.id
+    if not is_admin(user_id):
+        bot.reply_to(message, "❌ 您没有管理员权限")
+        return
+    
+    try:
+        # 从 D1 获取账号统计
+        accounts = d1_client.query_d1("SELECT COUNT(*) as total, SUM(CASE WHEN is_active = 1 THEN 1 ELSE 0 END) as active, SUM(used_invites) as total_invites FROM accounts", [])
+        
+        if accounts and len(accounts) > 0:
+            data = accounts[0]
+            total = data.get('total', 0)
+            active = data.get('active', 0)
+            total_invites = data.get('total_invites', 0) or 0
+            
+            text = f"""📊 账号池状态
+
+总账号数：{total}
+可用账号：{active}
+已发邀请：{total_invites}"""
+        else:
+            text = "📊 暂无账号数据"
+        
+        bot.reply_to(message, text)
+    except Exception as e:
+        bot.reply_to(message, f"❌ 获取状态失败: {str(e)[:50]}")
+
+@bot.message_handler(commands=['check'])
+def cmd_check(message):
+    """检测所有账号状态"""
+    user_id = message.from_user.id
+    if not is_admin(user_id):
+        bot.reply_to(message, "❌ 您没有管理员权限")
+        return
+    
+    processing_msg = bot.reply_to(message, "⏳ 正在检测账号状态...")
+    
+    try:
+        # 获取所有活跃账号
+        accounts = d1_client.query_d1("SELECT id, name, authorization_token FROM accounts WHERE is_active = 1", [])
+        
+        if not accounts:
+            bot.edit_message_text("📊 没有可用账号", message.chat.id, processing_msg.message_id)
+            return
+        
+        valid_count = 0
+        invalid_count = 0
+        
+        for acc in accounts:
+            acc_id = acc.get('id')
+            token = acc.get('authorization_token')
+            
+            # 简单检测 token 是否有效
+            try:
+                session = cffi_requests.Session(impersonate="chrome120")
+                session.proxies = {"http": PROXY_URL, "https": PROXY_URL}
+                
+                headers = {
+                    "Authorization": f"Bearer {token}" if not token.startswith("Bearer") else token,
+                    "Content-Type": "application/json"
+                }
+                
+                resp = session.get("https://chatgpt.com/backend-api/accounts/check/v4-2023-04-27", 
+                                  headers=headers, timeout=10)
+                
+                if resp.status_code == 200:
+                    valid_count += 1
+                    d1_client.query_d1("UPDATE accounts SET last_check_status = '正常', last_check_time = datetime('now') WHERE id = ?", [acc_id])
+                else:
+                    invalid_count += 1
+                    d1_client.query_d1("UPDATE accounts SET is_active = 0, last_check_status = '失效' WHERE id = ?", [acc_id])
+            except:
+                invalid_count += 1
+        
+        text = f"""✅ 检测完成
+
+有效账号：{valid_count}
+失效账号：{invalid_count}"""
+        
+        bot.edit_message_text(text, message.chat.id, processing_msg.message_id)
+    except Exception as e:
+        bot.edit_message_text(f"❌ 检测失败: {str(e)[:50]}", message.chat.id, processing_msg.message_id)
+
+@bot.message_handler(func=lambda m: m.text and ('@' in m.text) if m.text else False)
 def handle_email(message):
     user_id = message.from_user.id
-    email = message.text.strip().lower()
+    text = message.text.strip()
     
     # 检查白名单
     if not is_whitelisted(user_id):
         bot.reply_to(message, f"❌ 您没有使用权限\n\n您的用户ID：{user_id}")
         return
     
-    # 发送处理中提示
-    processing_msg = bot.reply_to(message, f"⏳ 正在发送邀请到 {email}...")
+    # 解析邮箱（支持逗号、空格、换行分隔）
+    import re
+    emails = re.split(r'[,\s\n]+', text)
+    emails = [e.strip().lower() for e in emails if EMAIL_REGEX.match(e.strip())]
     
-    max_retries = 3
-    attempt = 0
-    final_result_text = ""
+    if not emails:
+        bot.reply_to(message, "❓ 请发送有效的邮箱地址\n\n例如：test@gmail.com")
+        return
     
-    try:
-        while attempt < max_retries:
-            attempt += 1
-            # 获取可用 token
-            token = get_available_token()
-            if not token:
-                bot.edit_message_text("❌ 暂无可用账号，请稍后再试", 
-                                    message.chat.id, processing_msg.message_id)
-                return
-            
-            # 发送邀请
-            success, msg, status_code = get_team_id_and_send_invite(token, email)
-            
-            if success:
-                final_result_text = f"✅ 邀请发送成功\n\n📧 {email}\n\n请查收邮件"
-                break
-            else:
-                if status_code == 401:
-                    print(f"⚠️ 尝试 {attempt}/{max_retries} 失败: Token失效，已自动禁用账号，重试中...")
-                    continue # Token失效，重试，此时旧Token已被禁用，将获取新Token
+    # 单个邮箱
+    if len(emails) == 1:
+        email = emails[0]
+        processing_msg = bot.reply_to(message, f"⏳ 正在发送邀请到 {email}...")
+        
+        max_retries = 3
+        attempt = 0
+        final_result_text = ""
+        
+        try:
+            while attempt < max_retries:
+                attempt += 1
+                token = get_available_token()
+                if not token:
+                    bot.edit_message_text("❌ 暂无可用账号", message.chat.id, processing_msg.message_id)
+                    return
+                
+                success, msg, status_code = get_team_id_and_send_invite(token, email)
+                
+                if success:
+                    final_result_text = f"✅ 邀请发送成功\n\n📧 {email}\n\n请查收邮件"
+                    break
                 else:
-                    final_result_text = f"❌ 邀请发送失败\n\n📧 {email}\n原因：{msg}"
-                    break # 其他错误（如Team已满，邮箱无效等），不重试
+                    if status_code == 401:
+                        continue
+                    else:
+                        final_result_text = f"❌ 邀请失败\n\n📧 {email}\n原因：{msg}"
+                        break
+            
+            if not final_result_text:
+                final_result_text = f"❌ 连续 {max_retries} 次失败"
+            
+            bot.edit_message_text(final_result_text, message.chat.id, processing_msg.message_id)
+        except Exception as e:
+            bot.edit_message_text(f"❌ 错误：{str(e)[:50]}", message.chat.id, processing_msg.message_id)
+    
+    # 批量邀请
+    else:
+        processing_msg = bot.reply_to(message, f"⏳ 批量邀请中... (0/{len(emails)})")
         
-        if not final_result_text:
-             final_result_text = f"❌ 连续 {max_retries} 次尝试失败"
+        success_count = 0
+        fail_count = 0
+        results = []
         
-        bot.edit_message_text(final_result_text, message.chat.id, processing_msg.message_id)
+        for i, email in enumerate(emails):
+            try:
+                token = get_available_token()
+                if not token:
+                    results.append(f"❌ {email} - 无可用账号")
+                    fail_count += 1
+                    continue
+                
+                success, msg, _ = get_team_id_and_send_invite(token, email)
+                
+                if success:
+                    results.append(f"✅ {email}")
+                    success_count += 1
+                else:
+                    results.append(f"❌ {email} - {msg[:20]}")
+                    fail_count += 1
+                
+                # 更新进度
+                if (i + 1) % 3 == 0 or i == len(emails) - 1:
+                    bot.edit_message_text(f"⏳ 批量邀请中... ({i+1}/{len(emails)})", 
+                                         message.chat.id, processing_msg.message_id)
+            except:
+                fail_count += 1
         
-    except Exception as e:
-        bot.edit_message_text(f"❌ 发生错误：{e}", message.chat.id, processing_msg.message_id)
+        # 发送结果
+        result_text = f"📊 批量邀请完成\n\n✅ 成功：{success_count}\n❌ 失败：{fail_count}"
+        bot.edit_message_text(result_text, message.chat.id, processing_msg.message_id)
 
 @bot.message_handler(func=lambda m: True)
 def handle_other(message):
