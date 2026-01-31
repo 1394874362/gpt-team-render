@@ -282,7 +282,7 @@ def cmd_register(message):
         return
     
     # 发送处理中提示
-    processing_msg = bot.reply_to(message, "⏳ 开始注册账号，请稍候...")
+    processing_msg = bot.reply_to(message, "⏳ 注册中...")
     
     try:
         # 导入注册模块
@@ -306,26 +306,25 @@ def cmd_register(message):
                     is_active=True,
                     max_invites=8
                 )
-                
-                # 分两条消息发送，避免太长
-                success_msg = f"✅ 注册成功\n\n📧 {email}\n🔑 {password}"
-                bot.edit_message_text(success_msg, message.chat.id, processing_msg.message_id)
-                
-                # Token 单独发送（截断显示）
-                bot.send_message(message.chat.id, f"🎫 Token:\n{token[:100]}...")
-                
+                db_status = "已保存"
             except Exception as e:
-                # 数据库保存失败，但注册成功
-                success_msg = f"✅ 注册成功\n\n📧 {email}\n🔑 {password}\n\n⚠️ 数据库保存失败"
-                bot.edit_message_text(success_msg, message.chat.id, processing_msg.message_id)
-                bot.send_message(message.chat.id, f"🎫 Token:\n{token[:100]}...")
+                db_status = "保存失败"
+            
+            # 编辑原消息
+            bot.edit_message_text(f"✅ 注册成功 ({db_status})", message.chat.id, processing_msg.message_id)
+            
+            # 分3条短消息发送
+            bot.send_message(message.chat.id, f"📧 {email}")
+            bot.send_message(message.chat.id, f"🔑 {password}")
+            bot.send_message(message.chat.id, f"🎫 {token[:80]}")
         else:
             # 注册失败
-            error_msg = result.get("error", "未知错误")
-            bot.edit_message_text(f"❌ 注册失败\n\n原因: {error_msg}", message.chat.id, processing_msg.message_id)
+            error_msg = result.get("error", "未知错误")[:100]
+            bot.edit_message_text(f"❌ 失败: {error_msg}", message.chat.id, processing_msg.message_id)
             
     except Exception as e:
-        bot.edit_message_text(f"❌ 注册异常\n\n{str(e)}", message.chat.id, processing_msg.message_id)
+        error_text = str(e)[:100]
+        bot.edit_message_text(f"❌ 异常: {error_text}", message.chat.id, processing_msg.message_id)
 
 
 @bot.message_handler(func=lambda m: EMAIL_REGEX.match(m.text.strip()) if m.text else False)
