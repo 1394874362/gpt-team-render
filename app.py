@@ -300,7 +300,7 @@ def cmd_register(message):
         return
     
     # 发送处理中提示
-    processing_msg = bot.reply_to(message, "⏳ 开始注册 ChatGPT 账号\n\n这可能需要 1-2 分钟，请耐心等待...")
+    processing_msg = bot.reply_to(message, "⏳ 开始注册账号，请稍候...")
     
     try:
         # 导入注册模块
@@ -326,17 +326,17 @@ def cmd_register(message):
                 )
                 
                 # 分两条消息发送，避免太长
-                success_msg = f"✅ 注册成功\n\n📧 邮箱: {email}\n🔑 密码: {password}\n\n账号已添加到数据库"
+                success_msg = f"✅ 注册成功\n\n📧 {email}\n🔑 {password}"
                 bot.edit_message_text(success_msg, message.chat.id, processing_msg.message_id)
                 
-                # Token 单独发送
-                bot.send_message(message.chat.id, f"🎫 Token:\n{token}")
+                # Token 单独发送（截断显示）
+                bot.send_message(message.chat.id, f"🎫 Token:\n{token[:100]}...")
                 
             except Exception as e:
                 # 数据库保存失败，但注册成功
-                success_msg = f"✅ 注册成功（数据库保存失败）\n\n📧 邮箱: {email}\n🔑 密码: {password}\n\n⚠️ 错误: {str(e)[:50]}"
+                success_msg = f"✅ 注册成功\n\n📧 {email}\n🔑 {password}\n\n⚠️ 数据库保存失败"
                 bot.edit_message_text(success_msg, message.chat.id, processing_msg.message_id)
-                bot.send_message(message.chat.id, f"🎫 Token:\n{token}")
+                bot.send_message(message.chat.id, f"🎫 Token:\n{token[:100]}...")
         else:
             # 注册失败
             error_msg = result.get("error", "未知错误")
