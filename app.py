@@ -1288,7 +1288,7 @@ def codex_chat():
     messages = data.get('messages', [])
     model = data.get('model', 'gpt-4')
     stream = data.get('stream', False)
-    use_playwright = data.get('use_playwright', True)  # 默认使用 Playwright
+    use_simple = data.get('use_simple', True)  # 默认使用简化版
     
     if not token:
         return jsonify({"code": 400, "message": "缺少token参数"}), 400
@@ -1296,25 +1296,34 @@ def codex_chat():
     if not messages:
         return jsonify({"code": 400, "message": "缺少messages参数"}), 400
     
-    print(f"🤖 [Codex] 收到聊天请求, model={model}, stream={stream}, use_playwright={use_playwright}")
+    print(f"🤖 [Codex] 收到聊天请求, model={model}, stream={stream}, use_simple={use_simple}")
     
-    # 使用 Playwright 方案
-    if use_playwright:
+    # 优先使用简化版（curl-cffi + 会话保持）
+    if use_simple:
         try:
-            from playwright_chat import chat_with_playwright
-            result = chat_with_playwright(token, messages, model, stream)
+            from simple_chat import chat_simple
+            result = chat_simple(token, messages, model, stream, proxy_url=PROXY_URL)
             
             if result['success']:
                 return jsonify(result['data'])
             else:
                 return jsonify({"code": 500, "message": result['error']}), 500
         except Exception as e:
-            print(f"❌ [Playwright] 错误: {e}")
-            return jsonify({"code": 500, "message": f"Playwright错误: {str(e)}"}), 500
+            print(f"❌ [Simple] 错误: {e}")
+            return jsonify({"code": 500, "message": f"Simple错误: {str(e)}"}), 500
     
-    # 使用 curl-cffi 方案（备用）
-    session = cffi_requests.Session(impersonate="chrome120")
-    session.proxies = {"http": PROXY_URL, "https": PROXY_URL}
+    # 使用 Playwright 方案（备用）
+    try:
+        from playwright_chat import chat_with_playwright
+        result = chat_with_playwright(token, messages, model, stream)
+        
+        if result['success']:
+            return jsonify(result['data'])
+        else:
+            return jsonify({"code": 500, "message": result['error']}), 500
+    except Exception as e:
+        print(f"❌ [Playwright] 错误: {e}")
+        return jsonify({"code": 500, "message": f"Playwright错误: {str(e)}"}), 500
     
     fake_device_id = str(uuid.uuid4())
     headers = {
